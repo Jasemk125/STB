@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schedule Text Builder</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1f1f1f; --muted: #6b6b6b;
+    --line: #e3e1db; --accent: #2f5d50; --accent-ink: #ffffff; --danger: #b3412f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #18181a; --card: #222225; --ink: #ececec; --muted: #9a9a9a;
+      --line: #36363a; --accent: #7fbfa9; --accent-ink: #10201b; --danger: #e07a68; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .lang button { border: 0; border-radius: 0; padding: 6px 12px; background: var(--card); }
+  .lang button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 12px; }
+  [dir="rtl"] .card h2, [dir="rtl"] th { letter-spacing: 0; }
+  .msg.err { color: var(--danger); min-height: 18px; margin-top: 6px; }
+  input.invalid { border-color: var(--danger); }
+  .form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 10px; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; width: 100%; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 8px 14px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .date-row { display: flex; gap: 12px; align-items: end; margin-bottom: 14px; flex-wrap: wrap; }
+  .date-row label { width: 200px; }
+  .date-preview { color: var(--muted); padding-bottom: 9px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; }
+  td.actions { white-space: nowrap; text-align: end; }
+  td.actions button { padding: 3px 8px; font-size: 13px; }
+  td.actions button.del { color: var(--danger); }
+  .empty { color: var(--muted); text-align: center !important; padding: 18px; }
+  textarea { width: 100%; min-height: 220px; font: 14px/1.5 ui-monospace, Menlo, Consolas, "Courier New", monospace;
+    color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; resize: vertical; }
+  [dir="rtl"] textarea { font-family: system-ui, Tahoma, sans-serif; }
+  /* Each line/cell picks its own direction, so "10:00 AM" never shows as "AM 10:00" in Arabic mode */
+  td:not(.actions), textarea, input:not([type=date]) { unicode-bidi: plaintext; }
+  [dir="rtl"] td:not(.actions):not(.empty) { text-align: right; }
+  [dir="rtl"] td.actions { text-align: left; }
+  [dir="ltr"] td:not(.actions):not(.empty) { text-align: left; }
+  [dir="ltr"] td.actions { text-align: right; }
+  /* Arabic mode: every result line sits on the right, English lines included */
+  [dir="rtl"] textarea, textarea[dir="rtl"] { text-align: right; }
+  /* English mode: every result line sits on the left, Arabic lines included */
+  [dir="ltr"] textarea, textarea[dir="ltr"] { text-align: left; }
+  .bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .msg { color: var(--accent); font-size: 13px; }
+  @media (max-width: 640px) { .form { grid-template-columns: 1fr 1fr; } .form button { grid-column: span 2; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 data-t="title"></h1>
+      <p class="sub" data-t="subtitle"></p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en">EN</button>
+      <button type="button" data-lang="ar">عربي</button>
+    </div>
+  </header>
+ 
+  <section class="card">
+    <h2 data-t="addEntry"></h2>
+    <div class="date-row">
+      <label><span data-t="date"></span> <input type="date" id="date"></label>
+      <span class="date-preview" id="datePreview"></span>
+    </div>
+    <div class="form" id="form">
+      <label><span data-t="name"></span> <input id="name" autocomplete="off"></label>
+      <label><span data-t="color"></span> <input id="color" list="colors" autocomplete="off"></label>
+      <label><span data-t="place"></span> <input id="place" autocomplete="off"></label>
+      <label><span data-t="time"></span> <input id="time" autocomplete="off"></label>
+      <button class="primary" type="button" id="submitBtn"></button>
+    </div>
+    <div class="msg err" id="formMsg"></div>
+    <datalist id="colors"></datalist>
+  </section>
+ 
+  <section class="card">
+    <h2 data-t="table"></h2>
+    <table>
+      <thead><tr>
+        <th>#</th><th data-t="time"></th><th data-t="name"></th>
+        <th data-t="color"></th><th data-t="place"></th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="bar"><button id="clear"></button></div>
+  </section>
+ 
+  <section class="card">
+    <h2 data-t="result"></h2>
+    <textarea id="output" readonly></textarea>
+    <div class="bar">
+      <button class="primary" id="copy" data-t="copy"></button>
+      <span class="msg" id="msg"></span>
+    </div>
+  </section>
+</main>
+ 
+<script>
+  const I18N = {
+    en: {
+      title: 'Schedule Text Builder',
+      subtitle: 'Add people to the table, then copy the generated text.',
+      addEntry: 'Add entry', date: 'Date', name: 'Name', color: 'Color', place: 'Place', time: 'Time',
+      table: 'Table', result: 'Result', add: 'Add', save: 'Save', edit: 'Edit', del: 'Delete',
+      up: 'Move up', down: 'Move down', clear: 'Clear all', confirmClear: 'Click again to confirm',
+      empty: 'No entries yet', copy: 'Copy text', copied: 'Copied!', nothing: 'Nothing to copy yet',
+      selected: 'Text selected — press Ctrl/Cmd + C', showsAs: 'Shows as: ', needName: 'Please enter a name',
+      phName: 'e.g. Ahmed', phColor: 'e.g. Blue', phPlace: 'e.g. Room 2', phTime: 'e.g. 10:00 AM',
+      colors: ['Red','Blue','Green','Yellow','Orange','Purple','Pink','Black','White','Grey','Brown']
+    },
+    ar: {
+      title: 'منشئ نص الجدول',
+      subtitle: 'أضف الأشخاص إلى الجدول، ثم انسخ النص الناتج.',
+      addEntry: 'إضافة', date: 'التاريخ', name: 'الاسم', color: 'اللون', place: 'المكان', time: 'الوقت',
+      table: 'الجدول', result: 'النتيجة', add: 'إضافة', save: 'حفظ', edit: 'تعديل', del: 'حذف',
+      up: 'تحريك لأعلى', down: 'تحريك لأسفل', clear: 'مسح الكل', confirmClear: 'اضغط مرة أخرى للتأكيد',
+      empty: 'لا توجد إدخالات بعد', copy: 'نسخ النص', copied: 'تم النسخ!', nothing: 'لا يوجد شيء للنسخ',
+      selected: 'تم تحديد النص — اضغط Ctrl/Cmd + C', showsAs: 'يظهر كـ: ', needName: 'يرجى إدخال الاسم',
+      phName: 'مثال: أحمد', phColor: 'مثال: أزرق', phPlace: 'مثال: غرفة 2', phTime: 'مثال: 10:00 ص',
+      colors: ['أحمر','أزرق','أخضر','أصفر','برتقالي','بنفسجي','وردي','أسود','أبيض','رمادي','بني']
+    }
+  };
+  const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const EN_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+ 
+  const KEY = 'schedule-builder-v1';
+  const $ = id => document.getElementById(id);
+  let rows = [];
+  let editIndex = -1;
+  let lang = 'en';
+  const t = k => I18N[lang][k];
+ 
+  // Convert Arabic-Indic (٠-٩) and Persian (۰-۹) digits, plus Arabic separators, to English.
+  function toEnDigits(s) {
+    return String(s ?? '')
+      .replace(/[٠-٩]/g, c => String(c.charCodeAt(0) - 0x0660))
+      .replace(/[۰-۹]/g, c => String(c.charCodeAt(0) - 0x06F0))
+      .replace(/٫/g, '.')   // Arabic decimal separator
+      .replace(/٬/g, ',');  // Arabic thousands separator
+  }
+  function normRow(r) {
+    return { name: toEnDigits(r.name).trim(), color: toEnDigits(r.color).trim(),
+             place: toEnDigits(r.place).trim(), time: toEnDigits(r.time).trim() };
+  }
+ 
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (s) {
+        rows = Array.isArray(s.rows) ? s.rows.map(normRow) : [];
+        if (s.date) $('date').value = s.date;
+        if (s.lang === 'ar' || s.lang === 'en') lang = s.lang;
+      }
+    } catch (e) {}
+    if (!$('date').value) {
+      const d = new Date();
+      $('date').value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify({ rows, date: $('date').value, lang })); } catch (e) {}
+  }
+ 
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = t('title');
+    document.querySelectorAll('[data-t]').forEach(el => el.textContent = t(el.dataset.t));
+    document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+    $('name').placeholder = t('phName');
+    $('color').placeholder = t('phColor');
+    $('place').placeholder = t('phPlace');
+    $('time').placeholder = t('phTime');
+    $('submitBtn').textContent = editIndex >= 0 ? t('save') : t('add');
+    $('clear').textContent = t('clear');
+    $('colors').innerHTML = t('colors').map(c => `<option>${c}</option>`).join('');
+    $('output').dir = lang === 'ar' ? 'rtl' : 'ltr';
+    clearTimeout(flashTimer); $('msg').textContent = '';
+    if ($('formMsg').textContent) $('formMsg').textContent = t('needName');
+    render();
+  }
+ 
+  function dateLabel() {
+    const v = $('date').value;
+    if (!v) return '';
+    const [y, m, d] = v.split('-').map(Number);
+    const wd = new Date(y, m - 1, d).getDay();
+    const day = lang === 'ar' ? AR_DAYS[wd] : EN_DAYS[wd];
+    return day + ' ' + String(d).padStart(2, '0');
+  }
+ 
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+ 
+  function render() {
+    $('datePreview').textContent = dateLabel() ? t('showsAs') + dateLabel() : '';
+    const tb = $('rows');
+    if (!rows.length) {
+      tb.innerHTML = `<tr><td class="empty" colspan="6">${t('empty')}</td></tr>`;
+    } else {
+      tb.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td><td>${esc(r.time)}</td><td>${esc(r.name)}</td>
+          <td>${esc(r.color)}</td><td>${esc(r.place)}</td>
+          <td class="actions">
+            <button data-a="up" data-i="${i}" title="${t('up')}">↑</button>
+            <button data-a="down" data-i="${i}" title="${t('down')}">↓</button>
+            <button data-a="edit" data-i="${i}">${t('edit')}</button>
+            <button data-a="del" data-i="${i}" class="del">${t('del')}</button>
+          </td>
+        </tr>`).join('');
+    }
+    $('output').value = buildText();
+    save();
+  }
+ 
+  function buildText() {
+    if (!rows.length) return '';
+    const blocks = rows.map(r => {
+      const lines = [];
+      if (r.time) lines.push(r.time);
+      lines.push(r.color ? `${r.name} (${r.color})` : r.name);
+      if (r.place) lines.push(r.place);
+      return lines.join('\n');
+    });
+    return dateLabel() + '\n' + blocks.join('\n\n');
+  }
+ 
+  const FIELDS = ['name', 'color', 'place', 'time'];
+ 
+  function clearFields() { FIELDS.forEach(id => $(id).value = ''); }
+  function resetForm() {
+    editIndex = -1; clearFields(); $('submitBtn').textContent = t('add');
+    $('formMsg').textContent = ''; $('name').classList.remove('invalid');
+  }
+ 
+  // No <form> submit: the published page runs in a sandboxed frame that blocks form submission.
+  function addOrSave() {
+    const r = normRow({
+      name: $('name').value, color: $('color').value,
+      place: $('place').value, time: $('time').value
+    });
+    if (!r.name) {
+      $('formMsg').textContent = t('needName');
+      $('name').classList.add('invalid');
+      $('name').focus();
+      return;
+    }
+    if (editIndex >= 0) rows[editIndex] = r; else rows.push(r);
+    resetForm();
+    $('name').focus();
+    render();
+  }
+ 
+  $('submitBtn').addEventListener('click', addOrSave);
+  FIELDS.forEach(id => $(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); addOrSave(); }
+  }));
+  $('name').addEventListener('input', () => {
+    if ($('name').value.trim()) { $('formMsg').textContent = ''; $('name').classList.remove('invalid'); }
+  });
+ 
+  $('rows').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const i = +b.dataset.i, a = b.dataset.a;
+    if (a === 'del') { rows.splice(i, 1); if (editIndex === i) resetForm(); }
+    if (a === 'up' && i > 0) [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]];
+    if (a === 'down' && i < rows.length - 1) [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]];
+    if (a === 'edit') {
+      const r = rows[i]; editIndex = i;
+      $('name').value = r.name; $('color').value = r.color; $('place').value = r.place; $('time').value = r.time;
+      $('submitBtn').textContent = t('save'); $('name').focus();
+    }
+    render();
+  });
+ 
+  let clearArmed = false;
+  $('clear').addEventListener('click', () => {
+    if (!rows.length) return;
+    if (!clearArmed) {
+      clearArmed = true; $('clear').textContent = t('confirmClear');
+      setTimeout(() => { clearArmed = false; $('clear').textContent = t('clear'); }, 3000);
+      return;
+    }
+    rows = []; clearArmed = false; $('clear').textContent = t('clear'); render();
+  });
+ 
+  document.querySelectorAll('.lang button').forEach(b =>
+    b.addEventListener('click', () => { lang = b.dataset.lang; applyLang(); }));
+ 
+  // Switch digits to English live while typing, keeping the cursor in place.
+  ['name', 'color', 'place', 'time'].forEach(id => {
+    $(id).addEventListener('input', e => {
+      const el = e.target, v = toEnDigits(el.value);
+      if (v !== el.value) {
+        const pos = el.selectionStart;
+        el.value = v;
+        try { el.setSelectionRange(pos, pos); } catch (err) {}
+      }
+    });
+  });
+ 
+  $('date').addEventListener('change', render);
+ 
+  $('copy').addEventListener('click', async () => {
+    const text = $('output').value;
+    if (!text) { flash(t('nothing')); return; }
+    try { await navigator.clipboard.writeText(text); flash(t('copied')); }
+    catch (e) { $('output').select(); flash(t('selected')); }
+  });
+  let flashTimer;
+  function flash(s) {
+    clearTimeout(flashTimer);
+    $('msg').textContent = s;
+    flashTimer = setTimeout(() => $('msg').textContent = '', 2500);
+  }
+ 
+  load(); applyLang();
+</script>
+</body>
+</html>
+ 
